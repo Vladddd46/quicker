@@ -1,4 +1,13 @@
 
+function onClickListHandler(listId) {
+	let elems = document.getElementsByClassName(`${listId}`);
+	// if user selects list checkbox => all subcheckboxes are selected, otherwise disselected.
+	let value = elems[0].checked;
+	for (let i=1; i<elems.length; i++) {
+		elems[i].checked = value;
+	}
+}
+
 async function makeList(listData, listId) {
 	/* @brief makes ul list in html with elements from listData array.
 	 * @param: listData - list elements
@@ -7,14 +16,25 @@ async function makeList(listData, listId) {
     let listContainer = document.createElement('div');
     let listElement = document.createElement('ul');
     listElement.textContent = "#" + listId;
+    let checkboxForWholeList  = document.createElement("INPUT");
+    checkboxForWholeList.setAttribute("type", "checkbox");
+    checkboxForWholeList.setAttribute("class", `${listId}`);
+    checkboxForWholeList.setAttribute("id", `list-${listId}`);
+    checkboxForWholeList.addEventListener('click', function(){onClickListHandler(listId);});
+    listElement.appendChild(checkboxForWholeList);
     listElement.setAttribute("class", "searchResult");
-    let listItem = document.createElement('li');
     document.body.appendChild(listContainer);
     listContainer.appendChild(listElement);
     let numberOfListItems = listData.length;
 
     for (let i = 0; i < numberOfListItems; ++i) {
-        listItem.textContent = listData[i];
+    	let listItem = document.createElement('li');
+    	let itemCheckBox = document.createElement("INPUT");
+		itemCheckBox.setAttribute("type", "checkbox");
+		itemCheckBox.setAttribute("class", `${listId}`);
+		itemCheckBox.setAttribute("id", `${listData[i].name}`);
+        listItem.textContent = listData[i].name;
+        listItem.appendChild(itemCheckBox);
         listElement.appendChild(listItem);
         listItem = document.createElement('li');
     }
@@ -82,11 +102,20 @@ async function getImageDataFromFileEntry(fileEntries) {
 			images[file.byteLength] = [];
 		}
 		let fname = elem.name;
-		images[file.byteLength].push({"name": fname, "rawData": file});
+		images[file.byteLength].push({"name": fname, "rawData": file, "entry": elem["entry"]});
 	}
 	return images;
 }
 
+
+function arrayIncludeImgHelper(arr, img) {
+	for (let i=0; i<arr.length; i++) {
+		if (arr[i]["name"] === img["name"]) {
+			return true;
+		}
+	}
+	return false;
+}
 
 async function getDuplicates(images) {
 	let duplicates = [];
@@ -98,22 +127,22 @@ async function getDuplicates(images) {
 				if (isSame(img_a["rawData"],img_b["rawData"])) {
 					let continueFlag = false;
 					for (let arr of duplicates) {
-						if (arr.includes(img_a["name"]) && arr.includes(img_b["name"])) {
+						if (arrayIncludeImgHelper(arr, img_a) && arrayIncludeImgHelper(arr, img_b) ) {
 							continueFlag = true;
 						}
-						else if (arr.includes(img_a["name"]))  {
-							arr.push(img_b["name"]);
+						else if (arrayIncludeImgHelper(arr, img_a))  {
+							arr.push({name: img_b["name"], entry: img_b["entry"]});
 							continueFlag = true;
 						}
-						else if (arr.includes(img_b["name"]))  {
-							arr.push(img_a["name"]);
+						else if (arrayIncludeImgHelper(arr, img_b)) {
+							arr.push({name: img_a["name"], entry: img_a["entry"]});
 							continueFlag = true;
 						}
 					}
 					if (continueFlag) {
 						continue;
 					}
-					duplicates.push([img_a["name"], img_b["name"]]);
+					duplicates.push([{name: img_a["name"], entry: img_a["entry"]}, {name: img_b["name"], entry: img_b["entry"]}]);
 				}
 			}
 		}
@@ -130,6 +159,17 @@ function createText(text, id) {
 	msgContainer.appendChild(innerText);
 }
 
+function onClickRemoveHandler(duplicates) {
+	for (let arr of duplicates) {
+		for (let elem of arr) {
+			let checkbox = document.getElementById(elem.name);
+			if (checkbox.checked) {
+				console.log("Must be removed: ", elem.name);
+			}
+		}
+	}
+}
+
 async function showDuplicates(duplicates) {
 	/* @brief: show found duplicates.
 	 */
@@ -141,6 +181,11 @@ async function showDuplicates(duplicates) {
 		for (let id in duplicates) {
 			await makeList(duplicates[id], +id + 1);
 		}
+		let removeDuplicatesButton = document.createElement("button");
+		removeDuplicatesButton.innerHTML = "remove!";
+		removeDuplicatesButton.setAttribute("id", "remove");
+		removeDuplicatesButton.addEventListener('click', function(){onClickRemoveHandler(duplicates);});
+		document.body.appendChild(removeDuplicatesButton);
 	}
 }
 
@@ -152,6 +197,10 @@ async function refreshPage() {
 		while(searchResultList.length != 0) {
 			searchResultList[0].remove();
 		}
+	}
+	let removeBtn = document.getElementById("remove");
+	if (removeBtn) {
+		removeBtn.remove();
 	}
 }
 
@@ -168,7 +217,7 @@ async function samePhotosFinder() {
 	 */
 	await refreshPage();
 	const dirHandle = await window.showDirectoryPicker();
-	let fileEntries = await getFileEntries(dirHandle, [], "./");;
+	let fileEntries = await getFileEntries(dirHandle, [], "./");
 	let images = await getImageDataFromFileEntry(fileEntries);
 	let duplicates = await getDuplicates(images);
 	await showDuplicates(duplicates);
