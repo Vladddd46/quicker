@@ -188,6 +188,8 @@ async function onClickRemoveHandler(duplicates, dirHandle) {
 		}
 	}
 	await removeFilesFromList(dirHandle, "./", duplicatesToDelete);
+	refreshPage();
+	alert("removed successfully");
 }
 
 async function showDuplicates(duplicates, dirHandle) {
