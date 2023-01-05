@@ -71,6 +71,7 @@ async function getFileEntries(dirHandle, fileEntries, dirName) {
 		}
 		else if (entry.kind === "directory" && isRecursiveSerach && entry.name[0] !== ".") {
 			const newHandle = await dirHandle.getDirectoryHandle( entry.name, { create: false } );
+			await newHandle.requestPermission({writable: true});
 			let path = dirName + entry.name + "/";
 			getFileEntries(newHandle, fileEntries, path);
 		}
@@ -159,18 +160,37 @@ function createText(text, id) {
 	msgContainer.appendChild(innerText);
 }
 
-function onClickRemoveHandler(duplicates) {
-	for (let arr of duplicates) {
-		for (let elem of arr) {
-			let checkbox = document.getElementById(elem.name);
-			if (checkbox.checked) {
-				console.log("Must be removed: ", elem.name);
+async function removeFilesFromList(dirHandle, dirName, duplicatesToDelete) {
+	for await (const entry of dirHandle.values()) {
+		if (entry.kind === "file") {
+			if (duplicatesToDelete.includes(dirName + entry.name)) {
+				dirHandle.removeEntry(entry.name);
+				console.log("Removed: " + dirName + entry.name);
 			}
+		}
+		else if (entry.kind === "directory" && entry.name[0] !== ".") {
+			const newHandle = await dirHandle.getDirectoryHandle( entry.name, { create: false } );
+			await newHandle.requestPermission({writable: true});
+			let path = dirName + entry.name + "/";
+			removeFilesFromList(newHandle, path, duplicatesToDelete);
 		}
 	}
 }
 
-async function showDuplicates(duplicates) {
+
+async function onClickRemoveHandler(duplicates, dirHandle) {
+	let duplicatesToDelete = [];
+	for (let arr of duplicates) {
+		for (let duplicate of arr) {
+			if (document.getElementById(duplicate.name).checked) {
+				duplicatesToDelete.push(duplicate.name);
+			}
+		}
+	}
+	await removeFilesFromList(dirHandle, "./", duplicatesToDelete);
+}
+
+async function showDuplicates(duplicates, dirHandle) {
 	/* @brief: show found duplicates.
 	 */
 	await refreshPage();
@@ -184,7 +204,7 @@ async function showDuplicates(duplicates) {
 		let removeDuplicatesButton = document.createElement("button");
 		removeDuplicatesButton.innerHTML = "remove!";
 		removeDuplicatesButton.setAttribute("id", "remove");
-		removeDuplicatesButton.addEventListener('click', function(){onClickRemoveHandler(duplicates);});
+		removeDuplicatesButton.addEventListener('click', function(){onClickRemoveHandler(duplicates, dirHandle);});
 		document.body.appendChild(removeDuplicatesButton);
 	}
 }
@@ -216,11 +236,12 @@ async function samePhotosFinder() {
 	 *		5. show result.
 	 */
 	await refreshPage();
-	const dirHandle = await window.showDirectoryPicker();
+	const dirHandle = await window.showDirectoryPicker({startIn: 'desktop'});
+	await dirHandle.requestPermission({writable: true});
 	let fileEntries = await getFileEntries(dirHandle, [], "./");
 	let images = await getImageDataFromFileEntry(fileEntries);
 	let duplicates = await getDuplicates(images);
-	await showDuplicates(duplicates);
+	await showDuplicates(duplicates, dirHandle);
 }
 
 async function entryPoint() {
